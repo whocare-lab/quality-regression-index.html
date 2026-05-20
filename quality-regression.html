@@ -1,0 +1,1446 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>來料品質異常迴歸分析｜AI 提示詞工具</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: "Microsoft JhengHei", "PingFang TC", "Noto Sans TC", sans-serif;
+            background: linear-gradient(135deg, #f5f7fa 0%, #e4e8ec 100%);
+            color: #2d3748;
+            line-height: 1.7;
+        }
+        .container { max-width: 1100px; margin: 0 auto; padding: 20px; }
+
+        /* Header */
+        header {
+            background: linear-gradient(135deg, #1e3a5f 0%, #2d4a6f 100%);
+            color: white;
+            padding: 50px 30px;
+            border-radius: 16px;
+            margin-bottom: 30px;
+            box-shadow: 0 10px 40px rgba(30,58,95,0.25);
+            text-align: center;
+        }
+        header h1 { font-size: 2rem; margin-bottom: 12px; font-weight: 700; }
+        header .subtitle { font-size: 1.05rem; opacity: 0.9; margin-bottom: 8px; }
+        header .meta { font-size: 0.9rem; opacity: 0.75; }
+
+        /* Section */
+        .section {
+            background: white;
+            border-radius: 14px;
+            padding: 35px 30px;
+            margin-bottom: 25px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.06);
+            border: 1px solid #e2e8f0;
+        }
+        .section-title {
+            font-size: 1.4rem;
+            color: #1e3a5f;
+            font-weight: 700;
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .section-title .icon {
+            width: 36px; height: 36px;
+            background: linear-gradient(135deg, #e76f51, #f4a261);
+            border-radius: 10px;
+            display: flex; align-items: center; justify-content: center;
+            color: white; font-size: 1.1rem;
+        }
+        .section-desc {
+            color: #718096;
+            font-size: 0.95rem;
+            margin-bottom: 25px;
+            padding-left: 46px;
+        }
+
+        /* Prompt Cards */
+        .prompt-card {
+            background: linear-gradient(135deg, #f8fafc 0%, #edf2f7 100%);
+            border: 2px solid #e2e8f0;
+            border-radius: 12px;
+            padding: 25px;
+            margin-bottom: 20px;
+            position: relative;
+            transition: all 0.3s ease;
+        }
+        .prompt-card:hover {
+            border-color: #3d5a80;
+            box-shadow: 0 6px 24px rgba(30,58,95,0.12);
+            transform: translateY(-2px);
+        }
+        .prompt-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+        .prompt-label {
+            display: inline-block;
+            background: #1e3a5f;
+            color: white;
+            padding: 5px 14px;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            font-weight: 600;
+        }
+        .prompt-title {
+            font-size: 1.15rem;
+            font-weight: 700;
+            color: #2d3748;
+        }
+        .prompt-content {
+            background: white;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            padding: 18px;
+            font-family: "SF Mono", "Fira Code", Consolas, monospace;
+            font-size: 0.9rem;
+            line-height: 1.8;
+            color: #4a5568;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            max-height: 320px;
+            overflow-y: auto;
+        }
+        .btn-copy {
+            background: linear-gradient(135deg, #e76f51, #f4a261);
+            color: white;
+            border: none;
+            padding: 8px 20px;
+            border-radius: 8px;
+            font-size: 0.9rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .btn-copy:hover {
+            transform: scale(1.05);
+            box-shadow: 0 4px 12px rgba(231,111,81,0.35);
+        }
+        .btn-copy.copied {
+            background: linear-gradient(135deg, #2a9d8f, #48c9b0);
+        }
+
+        /* Data Table */
+        .data-toolbar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+        .data-info {
+            color: #718096;
+            font-size: 0.9rem;
+        }
+        .table-wrapper {
+            overflow-x: auto;
+            border-radius: 10px;
+            border: 1px solid #e2e8f0;
+            max-height: 520px;
+            overflow-y: auto;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.88rem;
+            min-width: 700px;
+        }
+        thead {
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+        th {
+            background: linear-gradient(135deg, #1e3a5f, #2d4a6f);
+            color: white;
+            padding: 12px 10px;
+            text-align: center;
+            font-weight: 600;
+            font-size: 0.85rem;
+            letter-spacing: 0.5px;
+        }
+        td {
+            padding: 10px;
+            text-align: center;
+            border-bottom: 1px solid #edf2f7;
+            color: #4a5568;
+        }
+        tr:nth-child(even) { background: #f8fafc; }
+        tr:hover { background: #edf2f7; }
+        .high-anomaly { color: #e76f51; font-weight: 700; }
+        .low-anomaly { color: #2a9d8f; font-weight: 700; }
+
+        /* Regression Box */
+        .regression-box {
+            background: linear-gradient(135deg, #1e3a5f, #2d4a6f);
+            color: white;
+            padding: 25px;
+            border-radius: 12px;
+            margin: 25px 0;
+            text-align: center;
+        }
+        .regression-box .eq {
+            font-family: "SF Mono", "Fira Code", Consolas, monospace;
+            font-size: 1.15rem;
+            letter-spacing: 0.5px;
+            margin: 10px 0;
+        }
+        .regression-box .r2 {
+            opacity: 0.85;
+            font-size: 0.95rem;
+        }
+        .regression-box .rank {
+            margin-top: 12px;
+            font-size: 0.85rem;
+            opacity: 0.7;
+        }
+
+        /* Author Section */
+        .author-section {
+            background: linear-gradient(135deg, #f8fafc 0%, #edf2f7 100%);
+            border: 2px solid #e2e8f0;
+            border-radius: 14px;
+            padding: 35px 30px;
+            margin-bottom: 25px;
+            text-align: center;
+        }
+        .author-section h3 {
+            color: #1e3a5f;
+            font-size: 1.3rem;
+            margin-bottom: 20px;
+            font-weight: 700;
+        }
+        .author-name {
+            font-size: 1.15rem;
+            font-weight: 700;
+            color: #2d3748;
+            margin-bottom: 12px;
+        }
+        .author-bio {
+            color: #4a5568;
+            font-size: 0.95rem;
+            line-height: 2;
+            max-width: 700px;
+            margin: 0 auto;
+        }
+        .author-links {
+            margin-top: 20px;
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 15px;
+        }
+        .author-links a {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            color: #3d5a80;
+            text-decoration: none;
+            font-size: 0.9rem;
+            font-weight: 600;
+            padding: 8px 16px;
+            background: white;
+            border-radius: 8px;
+            border: 1px solid #e2e8f0;
+            transition: all 0.2s;
+        }
+        .author-links a:hover {
+            background: #1e3a5f;
+            color: white;
+            border-color: #1e3a5f;
+        }
+        .author-quote {
+            margin-top: 20px;
+            padding: 18px 25px;
+            background: white;
+            border-left: 4px solid #e76f51;
+            border-radius: 0 10px 10px 0;
+            font-style: italic;
+            color: #4a5568;
+            font-size: 0.95rem;
+            max-width: 650px;
+            margin-left: auto;
+            margin-right: auto;
+            text-align: left;
+        }
+
+        /* Footer */
+        footer {
+            text-align: center;
+            padding: 30px;
+            color: #a0aec0;
+            font-size: 0.85rem;
+        }
+        footer a { color: #3d5a80; text-decoration: none; }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            header h1 { font-size: 1.5rem; }
+            .section { padding: 25px 20px; }
+            .prompt-content { font-size: 0.82rem; }
+            .author-links { flex-direction: column; align-items: center; }
+        }
+
+        /* Scrollbar */
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: #f1f1f1; }
+        ::-webkit-scrollbar-thumb { background: #c1c1c1; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #a8a8a8; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header>
+            <h1>📊 來料品質異常迴歸分析</h1>
+            <p class="subtitle">AI 提示詞工具｜數據分析與企業決策課程臨摹案例</p>
+            <p class="meta">羅懷鈞教授「數據分析與企業決策」｜100 批次樣本數據｜OLS 多元迴歸</p>
+        </header>
+
+        <!-- Section 1: Prompts -->
+        <div class="section">
+            <div class="section-title">
+                <div class="icon">🤖</div>
+                <span>首頁｜AI 提示詞（複製貼上即用）</span>
+            </div>
+            <p class="section-desc">以下三組提示詞，分別對應「完整分析流程」「數據解讀」「決策建議」三個階段。點擊「複製」後貼到 ChatGPT / Gemini / Kimi 即可使用。</p>
+
+            <!-- Prompt 1 -->
+            <div class="prompt-card">
+                <div class="prompt-header">
+                    <div>
+                        <span class="prompt-label">提示詞 01</span>
+                        <div class="prompt-title" style="margin-top:8px;">🎯 完整分析流程提示詞</div>
+                    </div>
+                    <button class="btn-copy" onclick="copyPrompt(this, 'p1')">📋 複製提示詞</button>
+                </div>
+                <div class="prompt-content" id="p1">你是一位「來料品質異常迴歸分析專家」，具備管理科學與品管實務雙重背景。
+
+我將提供 100 批次來料數據，請依照以下六步驟執行完整分析，並輸出繁體中文報告：
+
+【步驟一：問題定義】
+- 因變數 Y = 來料品質異常率(%)
+- 自變數 X₁=物料精密等級(1-10分)、X₂=供應商自檢合格率(%)、X₃=加急訂單佔比(%)、X₄=進料抽樣比例(%)、X₅=檢驗人員熟練度(1-10分)
+- 說明分析目的：找出影響異常率的關鍵因子，提供可量化的決策建議
+
+【步驟二：敘述統計】
+- 計算各變數的均值、標準差、最小值、最大值
+- 將異常率前20%與後20%分組，比較五項因子的差異
+- 標註關鍵發現
+
+【步驟三：相關分析】
+- 計算皮爾森相關係數矩陣
+- 標註與 Y 相關性最強的因子（|r|>0.5 為強相關）
+- 解讀方向（正相關/負相關）
+
+【步驟四：迴歸建模】
+- 建立 OLS 多元線性迴歸模型
+- 輸出迴歸方程、R²、調整後 R²
+- 計算標準化迴歸係數（Beta），排序影響力
+- 檢查模型顯著性（F-test、p-value）
+
+【步驟五：情境模擬】
+- 情境A：現行平均參數，預測異常率
+- 情境B：優化目標（例如自檢合格率提升4%、加急佔比降低7%），預測異常率與降幅
+- 計算年度報廢成本節省金額（假設來料總值5000萬、報廢成本率15%）
+
+【步驟六：決策建議】
+- 依影響力排序，給出三項優先行動
+- 每項行動需包含：具體做法、預期效果、負責單位、ROI估算
+- 結論用一句話總結：「源頭管理優於末端檢驗」
+
+請使用專業但易懂的語氣，所有數字標註單位，表格使用 Markdown 格式。</div>
+            </div>
+
+            <!-- Prompt 2 -->
+            <div class="prompt-card">
+                <div class="prompt-header">
+                    <div>
+                        <span class="prompt-label">提示詞 02</span>
+                        <div class="prompt-title" style="margin-top:8px;">📈 數據解讀與圖表生成</div>
+                    </div>
+                    <button class="btn-copy" onclick="copyPrompt(this, 'p2')">📋 複製提示詞</button>
+                </div>
+                <div class="prompt-content" id="p2">你是一位數據視覺化專家。請根據以下 100 批次來料數據，生成分析並繪製圖表：
+
+【要求】
+1. 繪製五個散點圖（每個自變數 vs 異常率），含迴歸線與相關係數標註
+2. 繪製高低異常率分組的箱型圖比較
+3. 繪製相關係數熱力圖
+4. 所有圖表使用統一配色：深藍 #1e3a5f、暖橙 #e76f51、淺灰底 #f8f9fa
+5. 中文字型清晰，圖表標題與軸標籤使用繁體中文
+
+【輸出格式】
+- 先給文字分析（各因子與異常率的關係解讀）
+- 再給圖表（使用 ASCII 或文字模擬圖表，若環境支援則生成圖片連結）
+- 最後給「一張圖看懂」的總結</div>
+            </div>
+
+            <!-- Prompt 3 -->
+            <div class="prompt-card">
+                <div class="prompt-header">
+                    <div>
+                        <span class="prompt-label">提示詞 03</span>
+                        <div class="prompt-title" style="margin-top:8px;">💡 決策建議與簡報生成</div>
+                    </div>
+                    <button class="btn-copy" onclick="copyPrompt(this, 'p3')">📋 複製提示詞</button>
+                </div>
+                <div class="prompt-content" id="p3">你是一位管理顧問，專精於 Evidence-Based Management。請根據以下迴歸分析結果，生成一份「給老闆看的決策簡報」：
+
+【簡報結構】
+1. 封面：來料品質異常因素分析｜迴歸決策建議
+2. 問題背景：為什麼要做這個分析（3行內）
+3. 關鍵發現：只講三個數字（最強因子、R²、預測降幅）
+4. 三個選項：
+   - 選項A：積極方案（投入最大、效果最好）
+   - 選項B：平衡方案（60/40資源配置）
+   - 選項C：保守方案（最小投入、局部改善）
+5. 推薦方案：選項B，說明理由（風險、成本、時間三面向）
+6. 行動計畫：具體KPI、負責人、時程、預算
+7. 風險提示：模型限制、未納入因子、情境變化
+
+【語氣要求】
+- 結論先行，每頁一個核心訊息
+- 用「調整A、降低B、省下C」的句式
+- 拒絕空泛形容詞，所有論點有數字支撐
+- 繁體中文，專業簡潔</div>
+            </div>
+        </div>
+
+        <!-- Section 2: Regression Equation -->
+        <div class="section">
+            <div class="section-title">
+                <div class="icon">🧮</div>
+                <span>迴歸方程與模型摘要</span>
+            </div>
+            <div class="regression-box">
+                <div style="font-size:0.9rem; opacity:0.8; margin-bottom:8px;">OLS 多元線性迴歸模型</div>
+                <div class="eq">Y = 24.57 − 0.20·X₁ − 0.17·X₂ + 0.04·X₃ − 0.02·X₄ − 0.12·X₅</div>
+                <div class="r2">R² = 0.721（調整後 R² = 0.706）｜樣本數 n = 100 批次</div>
+                <div class="rank">
+                    影響力排序：自檢合格率(|β|=0.66) > 精密等級(0.30) > 加急佔比(0.34) > 熟練度(0.20) > 抽樣比例(0.14)
+                </div>
+            </div>
+        </div>
+
+        <!-- Section 3: Data Table -->
+        <div class="section">
+            <div class="section-title">
+                <div class="icon">📋</div>
+                <span>次頁｜100 批次練習數據（複製貼上即可使用）</span>
+            </div>
+            <p class="section-desc">以下為本次臨摹案例的完整樣本數據。點擊「複製全部」可一次性複製 CSV 格式，貼到 Excel / Google Sheets / AI 對話框練習。</p>
+
+            <div class="data-toolbar">
+                <div class="data-info">📦 共 100 批次｜7 個欄位｜紅字 = 高異常率(≥8.0%)、綠字 = 低異常率(≤0.8%)</div>
+                <button class="btn-copy" onclick="copyTable()">📋 複製全部 CSV 格式</button>
+            </div>
+
+            <div class="table-wrapper">
+                <table id="dataTable">
+                    <thead>
+                        <tr>
+                            <th>批次</th>
+                            <th>異常率(%)</th>
+                            <th>精密等級</th>
+                            <th>自檢合格率(%)</th>
+                            <th>加急佔比(%)</th>
+                            <th>抽樣比例(%)</th>
+                            <th>熟練度</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>#001</td>
+                            <td class="">6.07</td>
+                            <td>9.1</td>
+                            <td>90.3</td>
+                            <td>33.6</td>
+                            <td>36.1</td>
+                            <td>9.8</td>
+                        </tr>
+                        <tr>
+                            <td>#002</td>
+                            <td class="high-anomaly">8.0</td>
+                            <td>7.8</td>
+                            <td>90.4</td>
+                            <td>42.9</td>
+                            <td>35.7</td>
+                            <td>5.5</td>
+                        </tr>
+                        <tr>
+                            <td>#003</td>
+                            <td class="">6.85</td>
+                            <td>6.5</td>
+                            <td>92.4</td>
+                            <td>21.6</td>
+                            <td>30.9</td>
+                            <td>7.2</td>
+                        </tr>
+                        <tr>
+                            <td>#004</td>
+                            <td class="high-anomaly">8.0</td>
+                            <td>6.6</td>
+                            <td>91.6</td>
+                            <td>26.9</td>
+                            <td>20.0</td>
+                            <td>6.6</td>
+                        </tr>
+                        <tr>
+                            <td>#005</td>
+                            <td class="high-anomaly">8.0</td>
+                            <td>8.1</td>
+                            <td>84.4</td>
+                            <td>20.2</td>
+                            <td>28.8</td>
+                            <td>7.3</td>
+                        </tr>
+                        <tr>
+                            <td>#006</td>
+                            <td class="">6.63</td>
+                            <td>8.4</td>
+                            <td>93.9</td>
+                            <td>33.0</td>
+                            <td>41.9</td>
+                            <td>6.3</td>
+                        </tr>
+                        <tr>
+                            <td>#007</td>
+                            <td class="high-anomaly">8.0</td>
+                            <td>3.1</td>
+                            <td>87.5</td>
+                            <td>33.8</td>
+                            <td>31.1</td>
+                            <td>8.0</td>
+                        </tr>
+                        <tr>
+                            <td>#008</td>
+                            <td class="">7.76</td>
+                            <td>4.9</td>
+                            <td>84.3</td>
+                            <td>5.0</td>
+                            <td>27.6</td>
+                            <td>7.8</td>
+                        </tr>
+                        <tr>
+                            <td>#009</td>
+                            <td class="">7.54</td>
+                            <td>7.4</td>
+                            <td>91.4</td>
+                            <td>28.6</td>
+                            <td>26.1</td>
+                            <td>4.8</td>
+                        </tr>
+                        <tr>
+                            <td>#010</td>
+                            <td class="high-anomaly">8.0</td>
+                            <td>6.9</td>
+                            <td>89.5</td>
+                            <td>15.1</td>
+                            <td>19.3</td>
+                            <td>5.6</td>
+                        </tr>
+                        <tr>
+                            <td>#011</td>
+                            <td class="high-anomaly">8.0</td>
+                            <td>8.3</td>
+                            <td>87.8</td>
+                            <td>34.1</td>
+                            <td>31.5</td>
+                            <td>5.3</td>
+                        </tr>
+                        <tr>
+                            <td>#012</td>
+                            <td class="">7.2</td>
+                            <td>9.1</td>
+                            <td>88.2</td>
+                            <td>12.8</td>
+                            <td>45.0</td>
+                            <td>7.1</td>
+                        </tr>
+                        <tr>
+                            <td>#013</td>
+                            <td class="">7.08</td>
+                            <td>4.7</td>
+                            <td>93.2</td>
+                            <td>26.7</td>
+                            <td>25.3</td>
+                            <td>7.3</td>
+                        </tr>
+                        <tr>
+                            <td>#014</td>
+                            <td class="">7.53</td>
+                            <td>6.4</td>
+                            <td>89.9</td>
+                            <td>22.3</td>
+                            <td>27.8</td>
+                            <td>8.3</td>
+                        </tr>
+                        <tr>
+                            <td>#015</td>
+                            <td class="">6.52</td>
+                            <td>8.5</td>
+                            <td>89.4</td>
+                            <td>17.6</td>
+                            <td>33.7</td>
+                            <td>8.2</td>
+                        </tr>
+                        <tr>
+                            <td>#016</td>
+                            <td class="">5.36</td>
+                            <td>8.0</td>
+                            <td>90.8</td>
+                            <td>11.6</td>
+                            <td>20.1</td>
+                            <td>7.6</td>
+                        </tr>
+                        <tr>
+                            <td>#017</td>
+                            <td class="high-anomaly">8.0</td>
+                            <td>6.2</td>
+                            <td>85.4</td>
+                            <td>11.7</td>
+                            <td>34.1</td>
+                            <td>7.2</td>
+                        </tr>
+                        <tr>
+                            <td>#018</td>
+                            <td class="">7.48</td>
+                            <td>6.5</td>
+                            <td>90.3</td>
+                            <td>19.7</td>
+                            <td>30.0</td>
+                            <td>7.4</td>
+                        </tr>
+                        <tr>
+                            <td>#019</td>
+                            <td class="">7.49</td>
+                            <td>8.1</td>
+                            <td>89.1</td>
+                            <td>18.1</td>
+                            <td>21.7</td>
+                            <td>8.6</td>
+                        </tr>
+                        <tr>
+                            <td>#020</td>
+                            <td class="high-anomaly">8.0</td>
+                            <td>5.7</td>
+                            <td>92.8</td>
+                            <td>40.8</td>
+                            <td>30.2</td>
+                            <td>5.0</td>
+                        </tr>
+                        <tr>
+                            <td>#021</td>
+                            <td class="">6.95</td>
+                            <td>7.1</td>
+                            <td>90.4</td>
+                            <td>22.5</td>
+                            <td>41.6</td>
+                            <td>6.0</td>
+                        </tr>
+                        <tr>
+                            <td>#022</td>
+                            <td class="">5.4</td>
+                            <td>8.8</td>
+                            <td>96.6</td>
+                            <td>29.8</td>
+                            <td>26.7</td>
+                            <td>4.8</td>
+                        </tr>
+                        <tr>
+                            <td>#023</td>
+                            <td class="">6.36</td>
+                            <td>4.7</td>
+                            <td>92.1</td>
+                            <td>14.8</td>
+                            <td>20.2</td>
+                            <td>10.0</td>
+                        </tr>
+                        <tr>
+                            <td>#024</td>
+                            <td class="">6.82</td>
+                            <td>4.7</td>
+                            <td>90.6</td>
+                            <td>15.2</td>
+                            <td>34.9</td>
+                            <td>7.4</td>
+                        </tr>
+                        <tr>
+                            <td>#025</td>
+                            <td class="">7.26</td>
+                            <td>8.2</td>
+                            <td>87.8</td>
+                            <td>17.0</td>
+                            <td>23.8</td>
+                            <td>6.0</td>
+                        </tr>
+                        <tr>
+                            <td>#026</td>
+                            <td class="high-anomaly">8.0</td>
+                            <td>5.6</td>
+                            <td>86.1</td>
+                            <td>26.9</td>
+                            <td>36.9</td>
+                            <td>4.2</td>
+                        </tr>
+                        <tr>
+                            <td>#027</td>
+                            <td class="high-anomaly">8.0</td>
+                            <td>6.3</td>
+                            <td>86.7</td>
+                            <td>19.5</td>
+                            <td>27.9</td>
+                            <td>5.1</td>
+                        </tr>
+                        <tr>
+                            <td>#028</td>
+                            <td class="">6.17</td>
+                            <td>4.7</td>
+                            <td>96.2</td>
+                            <td>16.3</td>
+                            <td>38.4</td>
+                            <td>6.2</td>
+                        </tr>
+                        <tr>
+                            <td>#029</td>
+                            <td class="">7.16</td>
+                            <td>6.3</td>
+                            <td>91.9</td>
+                            <td>27.2</td>
+                            <td>29.0</td>
+                            <td>8.8</td>
+                        </tr>
+                        <tr>
+                            <td>#030</td>
+                            <td class="">6.57</td>
+                            <td>7.7</td>
+                            <td>88.7</td>
+                            <td>18.0</td>
+                            <td>25.1</td>
+                            <td>8.9</td>
+                        </tr>
+                        <tr>
+                            <td>#031</td>
+                            <td class="">5.11</td>
+                            <td>7.8</td>
+                            <td>94.5</td>
+                            <td>18.4</td>
+                            <td>31.8</td>
+                            <td>8.6</td>
+                        </tr>
+                        <tr>
+                            <td>#032</td>
+                            <td class="high-anomaly">8.0</td>
+                            <td>7.9</td>
+                            <td>82.8</td>
+                            <td>11.9</td>
+                            <td>28.5</td>
+                            <td>6.6</td>
+                        </tr>
+                        <tr>
+                            <td>#033</td>
+                            <td class="high-anomaly">8.0</td>
+                            <td>4.8</td>
+                            <td>86.9</td>
+                            <td>18.9</td>
+                            <td>22.4</td>
+                            <td>5.4</td>
+                        </tr>
+                        <tr>
+                            <td>#034</td>
+                            <td class="">7.18</td>
+                            <td>6.2</td>
+                            <td>89.3</td>
+                            <td>17.1</td>
+                            <td>29.1</td>
+                            <td>9.3</td>
+                        </tr>
+                        <tr>
+                            <td>#035</td>
+                            <td class="high-anomaly">8.0</td>
+                            <td>5.8</td>
+                            <td>80.9</td>
+                            <td>15.1</td>
+                            <td>21.9</td>
+                            <td>7.7</td>
+                        </tr>
+                        <tr>
+                            <td>#036</td>
+                            <td class="">6.64</td>
+                            <td>6.6</td>
+                            <td>95.7</td>
+                            <td>26.8</td>
+                            <td>19.5</td>
+                            <td>6.8</td>
+                        </tr>
+                        <tr>
+                            <td>#037</td>
+                            <td class="">5.97</td>
+                            <td>8.4</td>
+                            <td>95.2</td>
+                            <td>20.7</td>
+                            <td>30.9</td>
+                            <td>6.3</td>
+                        </tr>
+                        <tr>
+                            <td>#038</td>
+                            <td class="">7.76</td>
+                            <td>7.3</td>
+                            <td>88.2</td>
+                            <td>26.3</td>
+                            <td>30.3</td>
+                            <td>8.1</td>
+                        </tr>
+                        <tr>
+                            <td>#039</td>
+                            <td class="high-anomaly">8.0</td>
+                            <td>6.6</td>
+                            <td>90.2</td>
+                            <td>35.4</td>
+                            <td>40.0</td>
+                            <td>5.7</td>
+                        </tr>
+                        <tr>
+                            <td>#040</td>
+                            <td class="high-anomaly">8.0</td>
+                            <td>7.1</td>
+                            <td>89.3</td>
+                            <td>33.2</td>
+                            <td>23.0</td>
+                            <td>5.8</td>
+                        </tr>
+                        <tr>
+                            <td>#041</td>
+                            <td class="">5.46</td>
+                            <td>8.2</td>
+                            <td>94.6</td>
+                            <td>7.7</td>
+                            <td>30.0</td>
+                            <td>6.3</td>
+                        </tr>
+                        <tr>
+                            <td>#042</td>
+                            <td class="">7.1</td>
+                            <td>6.8</td>
+                            <td>93.1</td>
+                            <td>25.0</td>
+                            <td>23.4</td>
+                            <td>8.9</td>
+                        </tr>
+                        <tr>
+                            <td>#043</td>
+                            <td class="">6.28</td>
+                            <td>7.6</td>
+                            <td>90.2</td>
+                            <td>17.0</td>
+                            <td>35.5</td>
+                            <td>6.9</td>
+                        </tr>
+                        <tr>
+                            <td>#044</td>
+                            <td class="">5.19</td>
+                            <td>6.3</td>
+                            <td>98.0</td>
+                            <td>22.6</td>
+                            <td>35.1</td>
+                            <td>7.9</td>
+                        </tr>
+                        <tr>
+                            <td>#045</td>
+                            <td class="high-anomaly">8.0</td>
+                            <td>6.9</td>
+                            <td>86.7</td>
+                            <td>32.9</td>
+                            <td>32.1</td>
+                            <td>9.1</td>
+                        </tr>
+                        <tr>
+                            <td>#046</td>
+                            <td class="high-anomaly">8.0</td>
+                            <td>6.3</td>
+                            <td>88.6</td>
+                            <td>26.9</td>
+                            <td>42.7</td>
+                            <td>6.0</td>
+                        </tr>
+                        <tr>
+                            <td>#047</td>
+                            <td class="">7.01</td>
+                            <td>7.9</td>
+                            <td>91.8</td>
+                            <td>22.5</td>
+                            <td>39.0</td>
+                            <td>5.5</td>
+                        </tr>
+                        <tr>
+                            <td>#048</td>
+                            <td class="">7.6</td>
+                            <td>6.9</td>
+                            <td>91.3</td>
+                            <td>22.3</td>
+                            <td>26.7</td>
+                            <td>4.6</td>
+                        </tr>
+                        <tr>
+                            <td>#049</td>
+                            <td class="high-anomaly">8.0</td>
+                            <td>5.0</td>
+                            <td>92.4</td>
+                            <td>24.1</td>
+                            <td>34.2</td>
+                            <td>4.7</td>
+                        </tr>
+                        <tr>
+                            <td>#050</td>
+                            <td class="high-anomaly">8.0</td>
+                            <td>5.3</td>
+                            <td>89.8</td>
+                            <td>10.8</td>
+                            <td>27.9</td>
+                            <td>8.2</td>
+                        </tr>
+                        <tr>
+                            <td>#051</td>
+                            <td class="">7.31</td>
+                            <td>6.3</td>
+                            <td>93.8</td>
+                            <td>22.6</td>
+                            <td>30.5</td>
+                            <td>7.5</td>
+                        </tr>
+                        <tr>
+                            <td>#052</td>
+                            <td class="">6.85</td>
+                            <td>7.0</td>
+                            <td>93.4</td>
+                            <td>34.2</td>
+                            <td>23.1</td>
+                            <td>9.1</td>
+                        </tr>
+                        <tr>
+                            <td>#053</td>
+                            <td class="">6.6</td>
+                            <td>9.3</td>
+                            <td>93.4</td>
+                            <td>17.0</td>
+                            <td>29.7</td>
+                            <td>6.0</td>
+                        </tr>
+                        <tr>
+                            <td>#054</td>
+                            <td class="">7.3</td>
+                            <td>7.6</td>
+                            <td>90.9</td>
+                            <td>23.9</td>
+                            <td>40.9</td>
+                            <td>4.7</td>
+                        </tr>
+                        <tr>
+                            <td>#055</td>
+                            <td class="high-anomaly">8.0</td>
+                            <td>6.0</td>
+                            <td>93.9</td>
+                            <td>34.6</td>
+                            <td>25.2</td>
+                            <td>5.4</td>
+                        </tr>
+                        <tr>
+                            <td>#056</td>
+                            <td class="high-anomaly">8.0</td>
+                            <td>8.1</td>
+                            <td>87.9</td>
+                            <td>41.6</td>
+                            <td>19.4</td>
+                            <td>8.0</td>
+                        </tr>
+                        <tr>
+                            <td>#057</td>
+                            <td class="">5.72</td>
+                            <td>8.5</td>
+                            <td>95.6</td>
+                            <td>5.0</td>
+                            <td>27.4</td>
+                            <td>5.8</td>
+                        </tr>
+                        <tr>
+                            <td>#058</td>
+                            <td class="">7.81</td>
+                            <td>6.8</td>
+                            <td>91.5</td>
+                            <td>20.6</td>
+                            <td>29.5</td>
+                            <td>5.7</td>
+                        </tr>
+                        <tr>
+                            <td>#059</td>
+                            <td class="">6.06</td>
+                            <td>8.2</td>
+                            <td>92.3</td>
+                            <td>15.2</td>
+                            <td>30.6</td>
+                            <td>5.3</td>
+                        </tr>
+                        <tr>
+                            <td>#060</td>
+                            <td class="high-anomaly">8.0</td>
+                            <td>5.1</td>
+                            <td>84.9</td>
+                            <td>17.7</td>
+                            <td>25.6</td>
+                            <td>7.3</td>
+                        </tr>
+                        <tr>
+                            <td>#061</td>
+                            <td class="high-anomaly">8.0</td>
+                            <td>9.3</td>
+                            <td>85.0</td>
+                            <td>35.6</td>
+                            <td>26.7</td>
+                            <td>7.9</td>
+                        </tr>
+                        <tr>
+                            <td>#062</td>
+                            <td class="high-anomaly">8.0</td>
+                            <td>5.7</td>
+                            <td>85.6</td>
+                            <td>24.2</td>
+                            <td>41.4</td>
+                            <td>6.8</td>
+                        </tr>
+                        <tr>
+                            <td>#063</td>
+                            <td class="">6.65</td>
+                            <td>7.2</td>
+                            <td>95.0</td>
+                            <td>23.3</td>
+                            <td>33.9</td>
+                            <td>4.9</td>
+                        </tr>
+                        <tr>
+                            <td>#064</td>
+                            <td class="">7.69</td>
+                            <td>4.7</td>
+                            <td>88.7</td>
+                            <td>15.6</td>
+                            <td>30.2</td>
+                            <td>5.2</td>
+                        </tr>
+                        <tr>
+                            <td>#065</td>
+                            <td class="high-anomaly">8.0</td>
+                            <td>7.4</td>
+                            <td>86.9</td>
+                            <td>35.3</td>
+                            <td>27.4</td>
+                            <td>8.5</td>
+                        </tr>
+                        <tr>
+                            <td>#066</td>
+                            <td class="">7.28</td>
+                            <td>7.8</td>
+                            <td>90.6</td>
+                            <td>18.2</td>
+                            <td>18.0</td>
+                            <td>7.2</td>
+                        </tr>
+                        <tr>
+                            <td>#067</td>
+                            <td class="high-anomaly">8.0</td>
+                            <td>3.5</td>
+                            <td>81.2</td>
+                            <td>21.6</td>
+                            <td>42.9</td>
+                            <td>6.2</td>
+                        </tr>
+                        <tr>
+                            <td>#068</td>
+                            <td class="">6.86</td>
+                            <td>6.8</td>
+                            <td>98.0</td>
+                            <td>27.5</td>
+                            <td>25.7</td>
+                            <td>5.0</td>
+                        </tr>
+                        <tr>
+                            <td>#069</td>
+                            <td class="">5.9</td>
+                            <td>6.0</td>
+                            <td>95.7</td>
+                            <td>20.6</td>
+                            <td>27.0</td>
+                            <td>7.0</td>
+                        </tr>
+                        <tr>
+                            <td>#070</td>
+                            <td class="">7.75</td>
+                            <td>7.5</td>
+                            <td>89.8</td>
+                            <td>25.6</td>
+                            <td>41.3</td>
+                            <td>9.1</td>
+                        </tr>
+                        <tr>
+                            <td>#071</td>
+                            <td class="">7.77</td>
+                            <td>4.7</td>
+                            <td>89.2</td>
+                            <td>22.3</td>
+                            <td>35.0</td>
+                            <td>5.7</td>
+                        </tr>
+                        <tr>
+                            <td>#072</td>
+                            <td class="">6.18</td>
+                            <td>9.5</td>
+                            <td>92.0</td>
+                            <td>22.0</td>
+                            <td>33.3</td>
+                            <td>6.3</td>
+                        </tr>
+                        <tr>
+                            <td>#073</td>
+                            <td class="">7.64</td>
+                            <td>6.6</td>
+                            <td>91.5</td>
+                            <td>12.5</td>
+                            <td>19.9</td>
+                            <td>6.8</td>
+                        </tr>
+                        <tr>
+                            <td>#074</td>
+                            <td class="">6.63</td>
+                            <td>6.4</td>
+                            <td>91.2</td>
+                            <td>21.7</td>
+                            <td>32.3</td>
+                            <td>5.0</td>
+                        </tr>
+                        <tr>
+                            <td>#075</td>
+                            <td class="high-anomaly">8.0</td>
+                            <td>5.5</td>
+                            <td>89.7</td>
+                            <td>45.8</td>
+                            <td>25.4</td>
+                            <td>8.5</td>
+                        </tr>
+                        <tr>
+                            <td>#076</td>
+                            <td class="">5.37</td>
+                            <td>8.2</td>
+                            <td>92.2</td>
+                            <td>20.1</td>
+                            <td>44.1</td>
+                            <td>8.4</td>
+                        </tr>
+                        <tr>
+                            <td>#077</td>
+                            <td class="">6.29</td>
+                            <td>9.0</td>
+                            <td>90.8</td>
+                            <td>19.5</td>
+                            <td>30.8</td>
+                            <td>4.0</td>
+                        </tr>
+                        <tr>
+                            <td>#078</td>
+                            <td class="">7.49</td>
+                            <td>5.0</td>
+                            <td>88.7</td>
+                            <td>25.4</td>
+                            <td>35.4</td>
+                            <td>7.5</td>
+                        </tr>
+                        <tr>
+                            <td>#079</td>
+                            <td class="high-anomaly">8.0</td>
+                            <td>6.1</td>
+                            <td>88.0</td>
+                            <td>24.6</td>
+                            <td>30.3</td>
+                            <td>4.0</td>
+                        </tr>
+                        <tr>
+                            <td>#080</td>
+                            <td class="">4.37</td>
+                            <td>8.1</td>
+                            <td>93.8</td>
+                            <td>15.2</td>
+                            <td>38.9</td>
+                            <td>7.2</td>
+                        </tr>
+                        <tr>
+                            <td>#081</td>
+                            <td class="">6.58</td>
+                            <td>7.5</td>
+                            <td>90.3</td>
+                            <td>18.1</td>
+                            <td>31.7</td>
+                            <td>8.5</td>
+                        </tr>
+                        <tr>
+                            <td>#082</td>
+                            <td class="high-anomaly">8.0</td>
+                            <td>5.7</td>
+                            <td>89.8</td>
+                            <td>16.8</td>
+                            <td>21.8</td>
+                            <td>7.4</td>
+                        </tr>
+                        <tr>
+                            <td>#083</td>
+                            <td class="high-anomaly">8.0</td>
+                            <td>7.1</td>
+                            <td>87.2</td>
+                            <td>23.4</td>
+                            <td>15.2</td>
+                            <td>6.4</td>
+                        </tr>
+                        <tr>
+                            <td>#084</td>
+                            <td class="">6.97</td>
+                            <td>8.2</td>
+                            <td>88.4</td>
+                            <td>10.3</td>
+                            <td>31.0</td>
+                            <td>8.7</td>
+                        </tr>
+                        <tr>
+                            <td>#085</td>
+                            <td class="high-anomaly">8.0</td>
+                            <td>5.5</td>
+                            <td>89.4</td>
+                            <td>27.1</td>
+                            <td>24.4</td>
+                            <td>6.5</td>
+                        </tr>
+                        <tr>
+                            <td>#086</td>
+                            <td class="">7.45</td>
+                            <td>7.5</td>
+                            <td>89.2</td>
+                            <td>20.2</td>
+                            <td>43.3</td>
+                            <td>4.9</td>
+                        </tr>
+                        <tr>
+                            <td>#087</td>
+                            <td class="">7.42</td>
+                            <td>8.3</td>
+                            <td>91.2</td>
+                            <td>24.7</td>
+                            <td>37.1</td>
+                            <td>6.8</td>
+                        </tr>
+                        <tr>
+                            <td>#088</td>
+                            <td class="">7.02</td>
+                            <td>6.9</td>
+                            <td>90.6</td>
+                            <td>22.6</td>
+                            <td>31.1</td>
+                            <td>5.8</td>
+                        </tr>
+                        <tr>
+                            <td>#089</td>
+                            <td class="high-anomaly">8.0</td>
+                            <td>5.9</td>
+                            <td>89.7</td>
+                            <td>24.3</td>
+                            <td>37.3</td>
+                            <td>6.2</td>
+                        </tr>
+                        <tr>
+                            <td>#090</td>
+                            <td class="">7.01</td>
+                            <td>7.6</td>
+                            <td>89.1</td>
+                            <td>11.9</td>
+                            <td>25.7</td>
+                            <td>10.0</td>
+                        </tr>
+                        <tr>
+                            <td>#091</td>
+                            <td class="high-anomaly">8.0</td>
+                            <td>6.2</td>
+                            <td>89.4</td>
+                            <td>31.4</td>
+                            <td>15.0</td>
+                            <td>6.7</td>
+                        </tr>
+                        <tr>
+                            <td>#092</td>
+                            <td class="">5.92</td>
+                            <td>10.0</td>
+                            <td>93.6</td>
+                            <td>26.3</td>
+                            <td>25.7</td>
+                            <td>4.3</td>
+                        </tr>
+                        <tr>
+                            <td>#093</td>
+                            <td class="high-anomaly">8.0</td>
+                            <td>5.4</td>
+                            <td>89.7</td>
+                            <td>14.5</td>
+                            <td>32.1</td>
+                            <td>7.1</td>
+                        </tr>
+                        <tr>
+                            <td>#094</td>
+                            <td class="">5.78</td>
+                            <td>7.3</td>
+                            <td>96.5</td>
+                            <td>16.2</td>
+                            <td>17.7</td>
+                            <td>5.2</td>
+                        </tr>
+                        <tr>
+                            <td>#095</td>
+                            <td class="">4.22</td>
+                            <td>8.8</td>
+                            <td>93.9</td>
+                            <td>5.0</td>
+                            <td>29.3</td>
+                            <td>9.7</td>
+                        </tr>
+                        <tr>
+                            <td>#096</td>
+                            <td class="high-anomaly">8.0</td>
+                            <td>6.2</td>
+                            <td>86.4</td>
+                            <td>21.4</td>
+                            <td>34.5</td>
+                            <td>4.4</td>
+                        </tr>
+                        <tr>
+                            <td>#097</td>
+                            <td class="high-anomaly">8.0</td>
+                            <td>5.1</td>
+                            <td>86.4</td>
+                            <td>21.5</td>
+                            <td>22.2</td>
+                            <td>7.4</td>
+                        </tr>
+                        <tr>
+                            <td>#098</td>
+                            <td class="">6.41</td>
+                            <td>5.3</td>
+                            <td>97.7</td>
+                            <td>27.6</td>
+                            <td>31.0</td>
+                            <td>7.7</td>
+                        </tr>
+                        <tr>
+                            <td>#099</td>
+                            <td class="">7.97</td>
+                            <td>5.6</td>
+                            <td>86.4</td>
+                            <td>5.0</td>
+                            <td>34.5</td>
+                            <td>7.6</td>
+                        </tr>
+                        <tr>
+                            <td>#100</td>
+                            <td class="high-anomaly">8.0</td>
+                            <td>6.0</td>
+                            <td>82.0</td>
+                            <td>5.0</td>
+                            <td>28.7</td>
+                            <td>6.9</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Section 4: Usage -->
+        <div class="section">
+            <div class="section-title">
+                <div class="icon">📖</div>
+                <span>使用說明</span>
+            </div>
+            <div style="color:#4a5568; font-size:0.95rem; line-height:2;">
+                <p><strong>Step 1：</strong>點擊上方「複製提示詞」，將提示詞貼到 ChatGPT / Gemini / Kimi。</p>
+                <p><strong>Step 2：</strong>回到此頁面，點擊「複製全部 CSV 格式」，將 100 批次數據貼給 AI。</p>
+                <p><strong>Step 3：</strong>AI 會自動執行六步驟分析，輸出完整報告、圖表與決策建議。</p>
+                <p><strong>Step 4：</strong>對照本文的「三個決策場景」，驗證 AI 的分析結果是否合理。</p>
+                <br>
+                <p style="color:#718096; font-size:0.9rem;">💡 小提示：若 AI 環境不支援表格貼上，可改貼「批次 #001 異常率 6.07% 精密等級 9.1...」的純文字描述，效果相同。</p>
+            </div>
+        </div>
+
+        <!-- Section 5: Author -->
+        <div class="author-section">
+            <h3>✍️ 關於作者</h3>
+            <div class="author-name">石頭哥｜27年科技業主管．教育部部定大專院校講師．職涯專欄作家．元智大學DBA 博士生</div>
+            <div class="author-bio">
+                研究學習：生態系競爭策略｜社會資本｜組織變革<br>
+                建構：AI × 文獻探討 × 原子句耦合框架
+            </div>
+            <div class="author-quote">
+                「相信每個人心中都有一道光；點亮它，人自然會前進。這也是撰寫中的《擴容》這本書的核心——帶你把職場傷痕煉就成領導力。」
+            </div>
+            <div class="author-links">
+                <a href="https://vocus.cc/user/@iiStone" target="_blank">📍 方格子寫作平台</a>
+                <a href="https://github.com/whocare-lab" target="_blank">🛠️ GitHub 開源倉庫</a>
+                <a href="mailto:s1149404@mail.yzu.edu.tw">📮 我想說說話</a>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <footer>
+            <p>來源：羅懷鈞教授「數據分析與企業決策」課程臨摹案例</p>
+            <p style="margin-top:6px;">製作：石頭哥｜<a href="https://vocus.cc/user/@iiStone" target="_blank">vocus.cc/user/@iiStone</a></p>
+        </footer>
+    </div>
+
+    <script>
+        function copyPrompt(btn, id) {
+            const text = document.getElementById(id).innerText;
+            navigator.clipboard.writeText(text).then(() => {
+                const original = btn.innerHTML;
+                btn.innerHTML = '✅ 已複製';
+                btn.classList.add('copied');
+                setTimeout(() => {
+                    btn.innerHTML = original;
+                    btn.classList.remove('copied');
+                }, 2000);
+            });
+        }
+
+        function copyTable() {
+            const rows = document.querySelectorAll('#dataTable tbody tr');
+            let csv = '批次,異常率(%),精密等級,自檢合格率(%),加急佔比(%),抽樣比例(%),熟練度\n';
+            rows.forEach(row => {
+                const cells = row.querySelectorAll('td');
+                const line = Array.from(cells).map(c => c.innerText).join(',');
+                csv += line + '\n';
+            });
+            navigator.clipboard.writeText(csv).then(() => {
+                const btn = document.querySelector('.data-toolbar .btn-copy');
+                const original = btn.innerHTML;
+                btn.innerHTML = '✅ 已複製 CSV';
+                btn.classList.add('copied');
+                setTimeout(() => {
+                    btn.innerHTML = original;
+                    btn.classList.remove('copied');
+                }, 2000);
+            });
+        }
+    </script>
+</body>
+</html>
